@@ -1,12 +1,11 @@
 buildscript {
 	ext {
 		springBootVersion = '1.3.5.RELEASE'
-		springCloudStarterParentTrain = 'Brixton.RELEASE'
-		scsVersion = '1.0.2.RELEASE'
-		sleuthVersion = '1.0.0.RC2'
+		springCloudStarterParentTrain = 'Brixton.SR1'
+		scsVersion = '1.1.0.RELEASE'
 		junitVersion = '4.12'
 		thymeleafExtras = '2.1.2.RELEASE'
-		dependencyPlugin = '0.5.3.RELEASE'
+		dependencyPlugin = '0.6.0.RELEASE'
 
 	}
 
@@ -81,17 +80,15 @@ targetCompatibility = 1.8
 
 repositories {
 	  mavenCentral()
-		maven { url "http://repo.spring.io/release" }
-		maven { url "http://repo.spring.io/milestone" }
-		maven { url "http://repo.spring.io/snapshot" }
+	maven {
+		url "https://repo.spring.io/plugins-release"
+	}
 }
 
 dependencyManagement {
 		imports {
-			mavenBom "org.springframework.boot:spring-boot-starter-parent:${springBootVersion}"
-            mavenBom "org.springframework.cloud:spring-cloud-dependencies:Brixton.SR1" 
-		    mavenBom "io.pivotal.spring.cloud:spring-cloud-services-dependencies:1.1.0.RELEASE" 
-            //mavenBom "org.springframework.cloud:spring-cloud-starter-parent:${springCloudStarterParentTrain}"
+			mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudStarterParentTrain}"
+			mavenBom "io.pivotal.spring.cloud:spring-cloud-services-dependencies:${scsVersion}"
 		}
 }
 dependencies {
@@ -102,17 +99,12 @@ dependencies {
 		// shared dependencies for all services
 		compile "org.springframework.boot:spring-boot-starter-web"
 		compile "org.springframework.boot:spring-boot-starter-actuator"
-       // compile "org.springframework.cloud:spring-cloud-stream-binder-rabbit"
-       // compile "org.springframework.boot:spring-boot-starter-aop:${springBootVersion}"
-        //compile("io.pivotal.spring.cloud:spring-cloud-services-starter-circuit-breaker")
-		//compile("io.pivotal.spring.cloud:spring-cloud-services-starter-config-client")
-       //compile("io.pivotal.spring.cloud:spring-cloud-services-starter-service-registry")
-     compile('org.springframework.cloud:spring-cloud-sleuth-stream')
-	compile "org.springframework.cloud:spring-cloud-stream-binder-rabbit"
-	 compile('io.pivotal.spring.cloud:spring-cloud-services-starter-circuit-breaker')
-	 compile('io.pivotal.spring.cloud:spring-cloud-services-starter-config-client')
-	 compile('io.pivotal.spring.cloud:spring-cloud-services-starter-service-registry')
-      compile "org.springframework.boot:spring-boot-starter-aop:${springBootVersion}"
+	    compile('org.springframework.cloud:spring-cloud-sleuth-stream')
+		compile "org.springframework.cloud:spring-cloud-stream-binder-rabbit"
+	    compile('io.pivotal.spring.cloud:spring-cloud-services-starter-config-client')
+	    compile('io.pivotal.spring.cloud:spring-cloud-services-starter-service-registry')
+	    compile('io.pivotal.spring.cloud:spring-cloud-services-starter-circuit-breaker')
+        compile "org.springframework.boot:spring-boot-starter-aop:${springBootVersion}"
 
 		//test packages
 		testCompile "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
