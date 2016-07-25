@@ -15,16 +15,25 @@ import io.pivotal.quotes.service.QuoteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.sleuth.Span;
+import org.springframework.cloud.sleuth.TraceKeys;
+import org.springframework.cloud.sleuth.Tracer;
+import org.springframework.cloud.sleuth.instrument.hystrix.TraceCommand;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.MatrixVariable;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.netflix.hystrix.HystrixCommandGroupKey;
+import com.netflix.hystrix.HystrixCommandKey;
+//import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
+import com.netflix.hystrix.HystrixCommand;
+
 
 /**
  * Rest Controller providing the REST API for the Quote Service. Provides two
@@ -33,18 +42,23 @@ import org.springframework.web.bind.annotation.RestController;
  * information for companies that match the {name}.
  * 
  * @author David Ferreira Pinto
- *
+ * @author Reshmi Krishna
  */
 @RestController
 @RequestMapping(value = "/v1")
 public class QuoteV1Controller {
 	private static final Logger logger = LoggerFactory.getLogger(QuoteV1Controller.class);
+	//including these
+	private final TraceKeys traceKeys = new TraceKeys();
+
 
 	/**
 	 * The service to delegate calls to.
 	 */
 	@Autowired
 	private QuoteService service;
+	@Autowired
+    Tracer tracer;
 
 	/**
 	 * Retrieves the current quote for the given symbol.
@@ -85,7 +99,8 @@ public class QuoteV1Controller {
 			quotes = service.getQuotes(query);
 		} else {
 			quotes = new ArrayList<>();
-			quotes.add(service.getQuote(splitQuery[0]));
+			String quote = splitQuery[0];
+			quotes.add(service.getQuote(quote));
 		}
 		logger.info(String.format("Retrieved symbols: %s with quotes {}", query, quotes));
 		return new ResponseEntity<List<Quote>>(quotes, getNoCacheHeaders(), HttpStatus.OK);
@@ -98,6 +113,8 @@ public class QuoteV1Controller {
 	 *            The name or symbol to search for.
 	 * @return The list of companies that match the search parameter.
 	 */
+	//@HystrixCommand(fallbackMethod = "getBackupCompany")
+	//@HystrixCommand(groupKey = "groupKey", commandKey = "commandKey", fallbackMethod = "getBackupCompany")
 	@RequestMapping(value = "/company/{name}", method = RequestMethod.GET)
 	public ResponseEntity<List<CompanyInfo>> getCompanies(@PathVariable("name") final String name) {
 		logger.debug("QuoteController.getCompanies: retrieving companies for: " + name);
@@ -105,6 +122,35 @@ public class QuoteV1Controller {
 		logger.info(String.format("Retrieved companies with search parameter: %s - list: {}", name), companies);
 		return new ResponseEntity<List<CompanyInfo>>(companies, HttpStatus.OK);
 	}
+	
+//	public ResponseEntity<List<CompanyInfo>> getBackupCompany(@PathVariable("name") final String name) throws InterruptedException {
+//        Span span = null;
+//        try {
+//            logger.debug("No companies available for : "+name+" Please check spelling");
+//            logger.info("Unknown Symbol = "+name);
+//            span = tracer.createSpan("processing_company_info");
+//            span.logEvent("company_not_found");
+//            tracer.addTag("quotes","failed");
+//            tracer.addTag("symbol", name);
+//            return null;
+//        } finally {
+//            tracer.close(span);
+//        }
+//
+//    }
+	
+	@RequestMapping("/springonehystrix")
+	public String springOneHystrix() throws Exception {
+		return "HYSTRIX [" + new TraceCommand<String>(this.tracer, this.traceKeys,
+				HystrixCommand.Setter.withGroupKey(
+					HystrixCommandGroupKey.Factory.asKey("springone"))
+					.andCommandKey(HystrixCommandKey.Factory.asKey("springonecommandkey"))) {
+			@Override public String doRun() throws Exception {
+				return "hello_from_springone_hystrix";
+			}
+		}.execute() + "]";
+	}
+
 
 	/**
 	 * Generates HttpHeaders that have the no-cache set.
