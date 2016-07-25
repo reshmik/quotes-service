@@ -17,8 +17,11 @@ import io.pivotal.quotes.exception.SymbolNotFoundException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.cloud.sleuth.Span;
+import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -29,11 +32,16 @@ import com.netflix.hystrix.contrib.javanica.annotation.HystrixProperty;
  * A service to retrieve Company and Quote information.
  * 
  * @author David Ferreira Pinto
+ * @author Reshmi Krishna
  *
  */
 @Service
 @RefreshScope
 public class QuoteService {
+	
+	@Autowired
+    Tracer tracer;
+
 	@Value("${pivotal.quotes.quotes_url}")
 	protected String quote_url;
 	@Value("${pivotal.quotes.quotes_url2}")
@@ -68,23 +76,47 @@ public class QuoteService {
 	 *            The symbol to retrieve the quote for.
 	 * @return The quote object or null if not found.
 	 * @throws SymbolNotFoundException
+	 * @throws InterruptedException 
 	 */
-	@HystrixCommand(fallbackMethod = "getXigniteQuote")
-	public Quote getQuote(String symbol) throws SymbolNotFoundException {
+	//@HystrixCommand(fallbackMethod = "getXigniteQuote")
+	@HystrixCommand(groupKey = "groupKey", commandKey = "commandKey", fallbackMethod = "getXigniteQuote")
+	public Quote getQuote(String symbol) throws SymbolNotFoundException{
 		logger.debug("QuoteService.getQuote: retrieving quote for: " + symbol);
 		Map<String, String> params = new HashMap<String, String>();
+		Span span = null;
+		span = tracer.createSpan("quotes_processing");
 		params.put("symbol", symbol);
-
+		span.logEvent("retrieving_quote");
 		Quote quote = restTemplate.getForObject(quote_url, Quote.class, params);
 		logger.debug("QuoteService.getQuote: retrieved quote: " + quote);
-
 		if (quote.getSymbol() == null) {
+	        span.logEvent("quote_not_found");
+	        tracer.addTag("quotes", "failed");
+	        tracer.addTag("symbol", symbol);
 			throw new SymbolNotFoundException("Symbol not found: " + symbol);
 		}
+		//testing alphabet's "GOOGL" symbol
+		if(symbol.contains("GOOGL"))
+		{
+			try {
+				span.logEvent("sleeping_finally");
+				Thread.sleep(500);
+				span.logEvent("waking_up_ughhh");
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		span.logEvent("quote_found");
+        tracer.addTag("quotes", "success");
+        tracer.addTag("symbol", symbol);
+        tracer.addTag("quantity", Integer.toString(quote.getVolume()));
+		tracer.close(span);
 		return quote;
 	}
 
-	@HystrixCommand(fallbackMethod = "getQuoteFallback")
+	//@HystrixCommand(fallbackMethod = "getQuoteFallback")
+	@HystrixCommand(groupKey = "groupKey", commandKey = "commandKey", fallbackMethod = "getQuoteFallback")
 	public Quote getXigniteQuote(String symbol) throws SymbolNotFoundException {
 		logger.debug("QuoteService2.getQuote: retrieving quote for: " + symbol);
 
@@ -133,8 +165,11 @@ public class QuoteService {
 	 *            The search parameter for company name or symbol.
 	 * @return The list of company information.
 	 */
-	@HystrixCommand(fallbackMethod = "getXigniteCompanyInfo",
-		    commandProperties = {
+//	@HystrixCommand(fallbackMethod = "getXigniteCompanyInfo",
+//		    commandProperties = {
+//		      @HystrixProperty(name="execution.timeout.enabled", value="false")
+//		    })
+	@HystrixCommand(groupKey = "groupKey", commandKey = "commandKey", fallbackMethod = "getXigniteCompanyInfo",commandProperties = {
 		      @HystrixProperty(name="execution.timeout.enabled", value="false")
 		    })
 	public List<CompanyInfo> getCompanyInfo(String name) {
@@ -181,8 +216,9 @@ public class QuoteService {
 	 * @return Company Info
 	 * @throws SymbolNotFoundException
 	 */
-	@HystrixCommand(fallbackMethod = "getCompanyInfoFallback")
-	public List<CompanyInfo> getXigniteCompanyInfo(String symbol)
+	//@HystrixCommand(fallbackMethod = "getCompanyInfoFallback")
+	@HystrixCommand(groupKey = "groupKey", commandKey = "commandKey", fallbackMethod = "getCompanyInfoFallback")
+    public List<CompanyInfo> getXigniteCompanyInfo(String symbol)
 			throws SymbolNotFoundException {
 		logger.debug("QuoteService.getCompanyInfo2: retrieving info for: "
 				+ symbol);
